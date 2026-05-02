@@ -44,6 +44,9 @@ import os
 # Make sure imports resolve from the project root regardless of CWD
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# FIX: Import onnxruntime BEFORE PyQt5 to avoid DLL conflicts on Windows!
+import onnxruntime
+
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QStackedWidget
 from PyQt5.QtGui     import QFont, QFontDatabase
 from PyQt5.QtCore    import Qt

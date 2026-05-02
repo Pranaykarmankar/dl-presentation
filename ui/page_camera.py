@@ -141,6 +141,12 @@ class CameraPreviewPage(QWidget):
 
         cl.addWidget(self.photo_btn); cl.addWidget(self.video_btn); cl.addStretch()
 
+        self.upload_btn = QPushButton('📁  Upload')
+        self.upload_btn.setCursor(Qt.PointingHandCursor)
+        self.upload_btn.setStyleSheet(self._inactive_style)
+        self.upload_btn.clicked.connect(self._upload_image)
+        cl.addWidget(self.upload_btn)
+
         self.capture_btn = make_btn_primary('📸  Capture Photo')
         self.capture_btn.setEnabled(False); self.capture_btn.setFixedWidth(200)
         self.capture_btn.clicked.connect(self._capture)
@@ -251,6 +257,31 @@ class CameraPreviewPage(QWidget):
                 try: os.remove(f)
                 except: pass
             self._open_camera()
+
+    def _upload_image(self):
+        from PyQt5.QtWidgets import QFileDialog
+        import shutil
+        path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Image Files (*.png *.jpg *.jpeg *.avif)")
+        if path:
+            self._stop_camera()
+            
+            # Copy to scans dir
+            ts   = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            sid  = self.scan.get('sample_id', 'scan').replace('/', '-')
+            ext = os.path.splitext(path)[1]
+            dest_path = os.path.join(SCANS_DIR, f'{sid}_{ts}{ext}')
+            shutil.copy2(path, dest_path)
+
+            dlg = PhotoApprovalDialog(dest_path, self)
+            if dlg.exec_() == QDialog.Accepted:
+                entry = {**self.scan, 'status':'captured', 'photo':dest_path, 'scan_date':now_str()}
+                scans = load_scans(); scans.append(entry); save_scans(scans)
+                self.toast.show_toast('Photo uploaded — proceeding to analysis','✓',C_GREEN)
+                QTimer.singleShot(700, lambda: self.proceed_analysis.emit(entry))
+            else:
+                try: os.remove(dest_path)
+                except: pass
+                self._open_camera()
 
     def _crop_to_bbox(self, full_path: str) -> str:
         """Scale the viewport bbox back to original frame resolution and crop."""

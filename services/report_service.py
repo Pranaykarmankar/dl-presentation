@@ -60,7 +60,7 @@ class ReportService:
         out_path  = os.path.join(REPORTS_DIR, filename)
 
         scan_data    = self._build_scan_data(scan)
-        defects_found = self._build_defects(ai_result)
+        defects_found = self._build_defects(ai_result, scan)
 
         if REPORTLAB_AVAILABLE:
             _generate_report(scan_data, defects_found, out_path)
@@ -101,25 +101,48 @@ class ReportService:
             'overall_verdict': scan.get('overall_verdict', 'PENDING ANALYSIS'),
         }
 
-    def _build_defects(self, ai_result) -> list:
+    def _build_defects(self, ai_result, scan: dict) -> list:
         """
         Convert an AIService DetectionResult into the defects_found list.
-
-        When ai_result is None (placeholder / pre-ML), returns an empty list
-        so the report correctly shows "No defects detected."
-
-        ── TO INTEGRATE THE REAL MODEL ──────────────────────────────────────
-        When AIService.run_inference() returns a real DetectionResult, the
-        boxes list will have BoundingBox objects with .label and .confidence.
-        Group them by label here and fill in image_path from the captured photo.
-        ─────────────────────────────────────────────────────────────────────
+        Also generates an annotated image with bounding boxes if a photo exists.
         """
-        if ai_result is None:
+        if ai_result is None or not getattr(ai_result, 'boxes', []):
             return []
 
-        # Group boxes by defect label
+        # ── Generate annotated image ───────────────────────────────────────
+        photo_path = scan.get('photo')
+        annotated_path = None
+
+        if photo_path and os.path.exists(photo_path):
+            try:
+                import cv2
+                img = cv2.imread(photo_path)
+                if img is not None:
+                    for box in ai_result.boxes:
+                        x1, y1, x2, y2 = int(box.x1), int(box.y1), int(box.x2), int(box.y2)
+                        
+                        # Use different colors for different defects if desired, defaulting to Red
+                        color = (0, 0, 255)  # BGR for Red
+                        
+                        label_text = f"{box.label.upper()} {int(box.confidence * 100)}%"
+                        
+                        cv2.rectangle(img, (x1, y1), (x2, y2), color, 4)
+                        
+                        # Background for text
+                        (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+                        cv2.rectangle(img, (x1, y1 - th - 10), (x1 + tw + 10, y1), color, -1)
+                        cv2.putText(img, label_text, (x1 + 5, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+                    report_id = scan.get('report_id', 'RPT-UNKNOWN')
+                    ts = datetime.datetime.now().strftime('%H%M%S')
+                    annotated_path = os.path.join(REPORTS_DIR, f"{report_id}_{ts}_annotated.jpg")
+                    cv2.imwrite(annotated_path, img)
+            except Exception as e:
+                print(f"[ReportService] Error generating annotated image: {e}")
+
+        # ── Group boxes by defect label ────────────────────────────────────
         groups: dict[str, list] = {}
-        for box in getattr(ai_result, 'boxes', []):
+        for box in ai_result.boxes:
             groups.setdefault(box.label, []).append(box)
 
         defects = []
@@ -130,7 +153,7 @@ class ReportService:
                 'count':          len(boxes),
                 'avg_confidence': round(avg_conf, 1),
                 'locations':      'Detected by AI model',
-                'image_path':     None,
+                'image_path':     annotated_path,
             })
         return defects
 

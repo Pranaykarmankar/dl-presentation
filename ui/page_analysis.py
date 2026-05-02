@@ -411,12 +411,14 @@ class AnalysisPage(QWidget):
             'lack_of_penetration':'HIGH',
             'burn_through':       'HIGH',
             'slag_inclusion':     'HIGH',
+            'excess_reinforcement': 'HIGH',
             'undercut':           'MEDIUM',
             'porosity':           'MEDIUM',
             'overlap':            'MEDIUM',
             'underfill':          'MEDIUM',
             'arc_strike':         'LOW-MEDIUM',
             'spatter':            'LOW',
+            'spatters':           'LOW',
             'mechanical_mark':    'LOW',
         }
         return mapping.get(label.lower(), 'UNKNOWN')

@@ -21,8 +21,8 @@ SCANS_JSON = os.path.join(BASE_DIR, 'scans.json')
 # SECONDARY LOGO → static/DSES-Logo-2.png (optional; replace with your file)
 #
 # To swap in a different logo just change the filename below.
-LOGO_PRIMARY   = os.path.join(STATIC_DIR, 'sigmandt.avif')
-LOGO_SECONDARY = os.path.join(STATIC_DIR, 'sigmandt.avif')  # place your file here
+LOGO_PRIMARY   = os.path.join(STATIC_DIR, 'sigmandt.png')
+LOGO_SECONDARY = os.path.join(STATIC_DIR, 'sigmandt.png')  # place your file here
 
 os.makedirs(SCANS_DIR, exist_ok=True)
 

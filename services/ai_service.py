@@ -26,8 +26,8 @@ from typing import List, Optional
 #   /home/pi/Desktop/Weld-Inspection/model/end2end.onnx
 # On other systems set the env var  WELD_MODEL_PATH  or change this default.
 _DEFAULT_MODEL = os.environ.get(
-    '/Users/raunak/Downloads/weld_inspector/model/best.onnx',
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'model', 'end2end.onnx')
+    'WELD_MODEL_PATH',
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'model', 'best.onnx')
 )
 
 try:
@@ -93,10 +93,9 @@ class AIService:
     # Confidence threshold — detections below this are discarded
     CONF_THRESHOLD = 0.45
 
-    # Class names produced by the model (index → label)
+    # Exact classes from the custom ONNX model metadata
     CLASS_NAMES = [
-        'porosity', 'crack', 'undercut', 'overlap',
-        'incomplete_fusion', 'spatter', 'slag_inclusion',
+        'crack', 'excess_reinforcement', 'porosity', 'spatters'
     ]
 
     def __init__(self, model_path: str = _DEFAULT_MODEL):
@@ -109,14 +108,17 @@ class AIService:
     def _load_model(self):
         """Load ONNX model if available; silently fall back to simulation."""
         if not _ORT_AVAILABLE:
+            with open('ai_error.log', 'a') as f: f.write('ORT NOT AVAILABLE\n')
             return
         if not os.path.exists(self._model_path):
+            with open('ai_error.log', 'a') as f: f.write(f'Model path not found: {self._model_path}\n')
             return
         try:
             providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             self._session = ort.InferenceSession(self._model_path, providers=providers)
         except Exception as e:
             print(f'[AIService] Could not load model: {e}')
+            with open('ai_error.log', 'a') as f: f.write(f'Could not load model: {e}\n')
             self._session = None
 
     @property
@@ -149,50 +151,111 @@ class AIService:
 
         ┌─ TODO when you have the real model ─────────────────────────────────┐
         │  Adjust the input tensor name (self._session.get_inputs()[0].name)  │
-        │  and the output parsing to match your model's output format.        │
-        └─────────────────────────────────────────────────────────────────────┘
         """
+    def _real_inference(self, frame, w: int, h: int, ts: str) -> DetectionResult:
         try:
             import cv2
             import numpy as np
             import time
 
-            t0     = time.perf_counter()
-            resized = cv2.resize(frame, (self.INPUT_W, self.INPUT_H))
-            blob    = resized.astype('float32') / 255.0
-            blob    = blob.transpose(2, 0, 1)[None]          # NCHW
+            t0 = time.perf_counter()
+
+            # ── Preprocess with Letterbox to maintain aspect ratio ──────
+            shape = frame.shape[:2]  # h, w
+            r = min(self.INPUT_W / shape[1], self.INPUT_H / shape[0])
+            new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+            dw, dh = self.INPUT_W - new_unpad[0], self.INPUT_H - new_unpad[1]
+            dw /= 2  # pad both sides
+            dh /= 2
+
+            if shape[::-1] != new_unpad:
+                resized = cv2.resize(frame, new_unpad, interpolation=cv2.INTER_LINEAR)
+            else:
+                resized = frame.copy()
+
+            top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+            left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+            resized = cv2.copyMakeBorder(resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
+
+            resized = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+            blob = resized.astype('float32') / 255.0
+            blob = blob.transpose(2, 0, 1)[None]  # NCHW
 
             input_name = self._session.get_inputs()[0].name
-            outputs    = self._session.run(None, {input_name: blob})
+            outputs = self._session.run(None, {input_name: blob})
 
-            # ── Parse output ─────────────────────────────────────────────────
-            # Adjust the slice indices to match your model's output format.
-            # Typical end2end format: [batch, num_dets, 6]  (x1,y1,x2,y2,conf,cls)
-            dets   = outputs[0][0]            # shape: (N, 6)
-            elapsed = (time.perf_counter() - t0) * 1000
+            # ── YOLOv8 output parsing ──────────────────────────
+            output = outputs[0]
+            output = np.squeeze(output)      # (84, 8400)
+            output = output.T               # (8400, 84)
 
-            boxes = []
-            scale_x = w / self.INPUT_W
-            scale_y = h / self.INPUT_H
-            for det in dets:
-                x1, y1, x2, y2, conf, cls_id = det
+            boxes_nms = []
+            confidences = []
+            class_ids = []
+
+            for row in output:
+                cx, cy, bw, bh = row[:4]
+                class_scores = row[4:]
+
+                cls_id = int(np.argmax(class_scores))
+                conf = float(class_scores[cls_id])
+
                 if conf < self.CONF_THRESHOLD:
                     continue
-                label = self.CLASS_NAMES[int(cls_id)] if int(cls_id) < len(self.CLASS_NAMES) else 'defect'
-                boxes.append(BoundingBox(
-                    x1=float(x1) * scale_x, y1=float(y1) * scale_y,
-                    x2=float(x2) * scale_x, y2=float(y2) * scale_y,
-                    confidence=float(conf), label=label, label_id=int(cls_id),
-                ))
+
+                # Convert (cx,cy,w,h) → (x1,y1,w,h) for NMS
+                x1 = cx - bw / 2
+                y1 = cy - bh / 2
+                boxes_nms.append([int(x1), int(y1), int(bw), int(bh)])
+                confidences.append(float(conf))
+                class_ids.append(cls_id)
+
+            # Apply Non-Maximum Suppression (NMS) to remove overlapping boxes
+            indices = cv2.dnn.NMSBoxes(boxes_nms, confidences, self.CONF_THRESHOLD, 0.45)
+
+            boxes = []
+            if len(indices) > 0:
+                for i in indices.flatten():
+                    x_min, y_min, bw, bh = boxes_nms[i]
+                    x_max = x_min + bw
+                    y_max = y_min + bh
+
+                    # Unpad and scale back to original image size
+                    x1 = (x_min - left) / r
+                    y1 = (y_min - top) / r
+                    x2 = (x_max - left) / r
+                    y2 = (y_max - top) / r
+
+                    cls_id = class_ids[i]
+                    label = self.CLASS_NAMES[cls_id] if cls_id < len(self.CLASS_NAMES) else 'defect'
+
+                    boxes.append(BoundingBox(
+                        x1=float(x1),
+                        y1=float(y1),
+                        x2=float(x2),
+                        y2=float(y2),
+                        confidence=confidences[i],
+                        label=label,
+                        label_id=cls_id,
+                    ))
+
+            elapsed = (time.perf_counter() - t0) * 1000
 
             return DetectionResult(
-                boxes=boxes, inference_time_ms=elapsed,
-                frame_width=w, frame_height=h,
-                is_simulated=False, timestamp=ts,
+                boxes=boxes,
+                inference_time_ms=elapsed,
+                frame_width=w,
+                frame_height=h,
+                is_simulated=False,
+                timestamp=ts,
             )
 
         except Exception as e:
             print(f'[AIService] Inference error: {e}')
+            import traceback
+            with open('ai_error.log', 'a') as f: 
+                f.write(f'Inference error: {e}\n')
+                f.write(traceback.format_exc() + '\n')
             return self._simulated_inference(w, h, ts)
 
     # ── Simulation (non-RPi / no model) ──────────────────────────────────────
