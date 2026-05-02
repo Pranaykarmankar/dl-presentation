@@ -1,0 +1,39 @@
+[
+  {
+    "sample_id": "qwe",
+    "operator": "ghhfd",
+    "report_id": "RPT-2026-00001",
+    "scan_date": "02 May 2026, 12:40",
+    "location": "Welding Bay 3, Plant A \u2014 Pune",
+    "specimen_type": "Pipe / Cylindrical",
+    "joint_config": "Single V Butt Joint (Plate)",
+    "material": "Stainless Steel",
+    "width": 250,
+    "height": 400,
+    "welding_process": "SMAW (Shielded Metal Arc Welding)",
+    "industry": "Oil & Gas",
+    "notes": "",
+    "scan_number": 1,
+    "status": "pending",
+    "id": "f93a2907"
+  },
+  {
+    "sample_id": "qwe",
+    "operator": "ghhfd",
+    "report_id": "RPT-2026-00001",
+    "scan_date": "02 May 2026, 12:41",
+    "location": "Welding Bay 3, Plant A \u2014 Pune",
+    "specimen_type": "Pipe / Cylindrical",
+    "joint_config": "Single V Butt Joint (Plate)",
+    "material": "Stainless Steel",
+    "width": 250,
+    "height": 400,
+    "welding_process": "SMAW (Shielded Metal Arc Welding)",
+    "industry": "Oil & Gas",
+    "notes": "",
+    "scan_number": 1,
+    "status": "captured",
+    "id": "f93a2907",
+    "photo": "/Users/raunak/Downloads/weld_inspector/scans/qwe_20260502_124109_cropped.jpg"
+  }
+]
