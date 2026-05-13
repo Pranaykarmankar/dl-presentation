@@ -35,5 +35,42 @@
     "status": "captured",
     "id": "f93a2907",
     "photo": "/Users/raunak/Downloads/weld_inspector/scans/qwe_20260502_124109_cropped.jpg"
+  },
+  {
+    "sample_id": "1213",
+    "operator": "pranay",
+    "report_id": "RPT-2026-00002",
+    "scan_date": "11 May 2026, 15:55",
+    "location": "Welding Bay 3, Plant A \u2014 Pune",
+    "specimen_type": "Plate / Flat",
+    "joint_config": "Double V Butt Joint",
+    "material": "Stainless Steel",
+    "width": 300,
+    "height": 500,
+    "welding_process": "SMAW (Shielded Metal Arc Welding)",
+    "industry": "Power Generation",
+    "notes": "",
+    "scan_number": 2,
+    "status": "pending",
+    "id": "90c8ce83"
+  },
+  {
+    "sample_id": "1213",
+    "operator": "pranay",
+    "report_id": "RPT-2026-00002",
+    "scan_date": "11 May 2026, 15:55",
+    "location": "Welding Bay 3, Plant A \u2014 Pune",
+    "specimen_type": "Plate / Flat",
+    "joint_config": "Double V Butt Joint",
+    "material": "Stainless Steel",
+    "width": 300,
+    "height": 500,
+    "welding_process": "SMAW (Shielded Metal Arc Welding)",
+    "industry": "Power Generation",
+    "notes": "",
+    "scan_number": 2,
+    "status": "captured",
+    "id": "90c8ce83",
+    "photo": "C:\\Users\\prana\\OneDrive\\Desktop\\dl-scratch-cnn\\dl-presentation\\scans\\1213_20260511_155541.jpg"
   }
 ]
